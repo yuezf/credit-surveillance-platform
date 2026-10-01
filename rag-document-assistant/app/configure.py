@@ -1,21 +1,36 @@
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.schema_constants import DEFAULT_EMBEDDING_DIMENSION
+
 load_dotenv()
 
-#OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL_BASE_URL = os.getenv("MODEL_BASE_URL")
+MODEL_API_KEY = os.getenv("MODEL_API_KEY")
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 LLM_MODEL = os.getenv("LLM_MODEL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+EMBEDDING_DIMENSION = int(
+    os.getenv("EMBEDDING_DIMENSION", str(DEFAULT_EMBEDDING_DIMENSION))
+)
 
-# if not OPENAI_API_KEY:
-#     raise ValueError("OPENAI_API_KEY not set. Please add it to your .env file.")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# EMBEDDING_MODEL = "text-embedding-3-small"
+if not MODEL_BASE_URL:
+    raise ValueError("MODEL_BASE_URL is not set")
 
-CHROMA_DB_PATH = Path("chroma_db")
+if not MODEL_API_KEY:
+    raise ValueError("MODEL_API_KEY is not set")
 
-CHROMA_COLLECTION_NAME = "documents"
+if not LLM_MODEL:
+    raise ValueError("LLM_MODEL is not set")
+
+if not EMBEDDING_MODEL:
+    raise ValueError("EMBEDDING_MODEL is not set")
+
+if EMBEDDING_DIMENSION <= 0:
+    raise ValueError("EMBEDDING_DIMENSION must be positive")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set")

@@ -2,6 +2,4 @@
 __pycache__/
 *.pyc
 .venv/
-chroma_db/tests/test_ingestion.py
 .DS_Store
-chroma_db/

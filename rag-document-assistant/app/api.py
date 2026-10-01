@@ -1,175 +1,213 @@
 import hashlib
-import uuid
 import shutil
+import uuid
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 from typing import Annotated, Any
-import chromadb
 
-from app.configure import CHROMA_DB_PATH, CHROMA_COLLECTION_NAME
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from app.ingestion import extract_pages_from_pdf
 from app.chunking import chunking_across_pages
-from app.vector_store import (
-    get_chroma_collection,
-    add_chunks_to_vector_store,
-    search_similar_chunks,
-    delete_user_chunks,
-    delete_document_chunks,
-    document_already_ingested,
+from app.configure import EMBEDDING_MODEL
+from app.database import check_database_connection, get_db_session
+from app.demo_seed import (
+    DEMO_BORROWER_ID,
+    DEMO_CURRENT_PERIOD_ID,
+    DEMO_TENANT_ID,
 )
+from app.document_repository import credit_scope_exists, get_document_by_hash
+from app.document_service import persist_document
+from app.embedding_service import get_embeddings_in_batches
+from app.ingestion import extract_pages_from_pdf
+from app.models import Document, DocumentChunk, DocumentPage
 from app.rag import generate_answer
+from app.retrieval_service import search_similar_chunks
+
 
 app = FastAPI(title="RAG Document Assistant")
 
 
-class ChunkingParameter(BaseModel):
-    chunk_size: int
-    overlap: int
-
-
 class SearchRequest(BaseModel):
     queries: list[str]
-    top_k: int
-    user_id: str
-    document_id: str | None = None
+    top_k: int = Field(gt=0, le=100)
+    document_id: uuid.UUID | None = None
+    borrower_id: uuid.UUID | None = None
+    reporting_period_id: uuid.UUID | None = None
+    max_distance: float | None = Field(default=0.6, ge=0)
 
 
 class AskRequest(BaseModel):
     query: str
-    top_k: int
-    user_id: str
-    document_id: str | None = None
+    top_k: int = Field(gt=0, le=100)
+    document_id: uuid.UUID | None = None
+    borrower_id: uuid.UUID | None = None
+    reporting_period_id: uuid.UUID | None = None
+    max_distance: float | None = Field(default=0.6, ge=0)
 
 
 def compute_file_hash(file_path: str) -> str:
-    """
-    Generate a 64-character SHA256 hash string for the content of each document.
-
-    If two documents share the exact same content, this hashed string would be
-    the same. This identifies the actual document content, not just the file name.
-    """
+    """Return the SHA-256 hash of a file's original bytes."""
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as file:
         for block in iter(lambda: file.read(1024 * 1024), b""):
             sha256.update(block)
-
     return sha256.hexdigest()
 
 
-def build_document_id(user_id: str, document_hash: str) -> str:
-    """
-    Generate a deterministic user_id that is unique for each user_id and document
-    hash pair.
-    
-    Same user + same document bytes => same document_id
-    """
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}:{document_hash}")) 
-
-
 @app.get("/health")
-def health_check():
+def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/ingest")
-async def ingest_pdf(
-    files: Annotated[list[UploadFile], File()], 
-    user_id: Annotated[str, Form()],
-    chunk_size: Annotated[int, Form()] = 500, 
-    overlap: Annotated[int, Form()] = 50,
-    force_reprocess: Annotated[bool, Form()] = False,
-):
-    if not user_id.strip():
-        raise HTTPException(code_status=400, detail="user_id is required")
-    
-    result = []
+@app.get("/health/ready")
+def readiness_check() -> dict[str, str]:
+    try:
+        check_database_connection()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Database is unavailable",
+        ) from exc
 
+    return {"status": "ready", "database": "ok"}
+
+
+@app.post("/ingest")
+def ingest_pdf(
+    files: Annotated[list[UploadFile], File()],
+    session: Annotated[Session, Depends(get_db_session)],
+    borrower_id: Annotated[uuid.UUID, Form()] = DEMO_BORROWER_ID,
+    reporting_period_id: Annotated[uuid.UUID, Form()] = DEMO_CURRENT_PERIOD_ID,
+    chunk_size: Annotated[int, Form(gt=0)] = 500,
+    overlap: Annotated[int, Form(ge=0)] = 50,
+    force_reprocess: Annotated[bool, Form()] = False,
+) -> dict[str, list[dict[str, Any]]]:
+    if overlap >= chunk_size:
+        raise HTTPException(
+            status_code=400,
+            detail="overlap must be smaller than chunk_size",
+        )
+    if not credit_scope_exists(
+        session,
+        tenant_id=DEMO_TENANT_ID,
+        borrower_id=borrower_id,
+        reporting_period_id=reporting_period_id,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Unknown borrower/reporting-period combination; run the demo seed",
+        )
+
+    results = []
     for file in files:
         if not file.filename or not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Only pdfs are supported")
+            raise HTTPException(status_code=400, detail="Only PDFs are supported")
 
-        # collection.delete(where={"document_name": file.filename})
-        temp_path = None
-    
+        temp_path: str | None = None
         try:
             with NamedTemporaryFile(delete=False, suffix=".pdf") as temp:
                 shutil.copyfileobj(file.file, temp)
                 temp_path = temp.name
 
             document_hash = compute_file_hash(temp_path)
-            document_id = build_document_id(user_id, document_hash)
-
-            already_ingested = document_already_ingested(user_id, document_id)
-
-            if already_ingested and not force_reprocess:
-                result.append(
+            existing_document = get_document_by_hash(
+                session,
+                tenant_id=DEMO_TENANT_ID,
+                content_hash=document_hash,
+            )
+            if existing_document is not None and not force_reprocess:
+                results.append(
                     {
                         "filename": file.filename,
-                        "user_id": user_id,
-                        "document_id": document_id,
+                        "tenant_id": str(DEMO_TENANT_ID),
+                        "borrower_id": str(existing_document.borrower_id),
+                        "reporting_period_id": str(
+                            existing_document.reporting_period_id
+                        ),
+                        "document_id": str(existing_document.id),
                         "document_hash": document_hash,
                         "status": "skipped_already_ingested",
                     }
                 )
                 continue
 
-            if already_ingested and force_reprocess:
-                delete_document_chunks(user_id, document_id)
-                
-            pages_collection = extract_pages_from_pdf(temp_path)
-            chunks = chunking_across_pages(
-            pages_collection, chunk_size, overlap,
+            pages = extract_pages_from_pdf(temp_path)
+            chunks = chunking_across_pages(pages, chunk_size, overlap)
+            embeddings = get_embeddings_in_batches(
+                [chunk.text for chunk in chunks]
+            )
+            persistence = persist_document(
+                session,
+                tenant_id=DEMO_TENANT_ID,
+                borrower_id=borrower_id,
+                reporting_period_id=reporting_period_id,
+                original_filename=file.filename,
+                content_hash=document_hash,
+                byte_size=Path(temp_path).stat().st_size,
+                pages=pages,
+                chunks=chunks,
+                embeddings=embeddings,
+                embedding_model=EMBEDDING_MODEL,
+                force_reprocess=force_reprocess,
             )
 
-            num_chunks = add_chunks_to_vector_store(
-                chunks=chunks, 
-                user_id=user_id,
-                document_id=document_id,
-                document_name=file.filename,
-                document_hash=document_hash,
-            )
-
-            result.append(
+            results.append(
                 {
                     "filename": file.filename,
-                    "user_id": user_id,
-                    "document_id": document_id,
+                    "tenant_id": str(DEMO_TENANT_ID),
+                    "borrower_id": str(borrower_id),
+                    "reporting_period_id": str(reporting_period_id),
+                    "document_id": str(persistence.document_id),
                     "document_hash": document_hash,
-                    "status": "force_reprocess" if already_ingested else "newly_ingested",
-                    "num_pages_with_text": len(pages_collection),
-                    "num_chunks": num_chunks,
+                    "status": (
+                        "force_reprocessed"
+                        if persistence.outcome == "reprocessed"
+                        else "newly_ingested"
+                    ),
+                    "num_pages_with_text": persistence.page_count,
+                    "num_chunks": persistence.chunk_count,
                     "preview": chunks[0].text[:100] if chunks else "",
-                    "first_chunk_page_range": {
-                        "start_page": chunks[0].start_page,
-                        "end_page": chunks[0].end_page,
-                        "page_span": chunks[0].page_span,
-                    } if chunks else None,
+                    "first_chunk_page_range": (
+                        {
+                            "start_page": chunks[0].start_page,
+                            "end_page": chunks[0].end_page,
+                            "page_span": chunks[0].page_span,
+                        }
+                        if chunks
+                        else None
+                    ),
                 }
             )
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
         finally:
-            if temp_path:
+            if temp_path is not None:
                 Path(temp_path).unlink(missing_ok=True)
-        
-    return {"documents": result}
+
+    return {"documents": results}
 
 
 @app.get("/")
-async def main():
-    content = """
+async def main() -> HTMLResponse:
+    content = f"""
     <html>
         <body>
-            <h2>Ingest PDFs</h2>
+            <h2>Ingest PDFs into PostgreSQL/pgvector</h2>
+            <p>Tenant: Demo Tenant ({DEMO_TENANT_ID})</p>
             <form action="/ingest" enctype="multipart/form-data" method="post">
-                <label>User ID:</label>
-                <input name="user_id" type="text" value="demo-user"><br><br>
+                <label>Borrower ID:</label>
+                <input name="borrower_id" type="text" value="{DEMO_BORROWER_ID}"><br><br>
+
+                <label>Reporting period ID:</label>
+                <input name="reporting_period_id" type="text" value="{DEMO_CURRENT_PERIOD_ID}"><br><br>
 
                 <label>Select PDF files:</label>
                 <input name="files" type="file" multiple><br><br>
@@ -180,9 +218,8 @@ async def main():
                 <label>Overlap:</label>
                 <input name="overlap" type="number" value="50"><br><br>
 
-                <label>Force reprocessing document (Can be used if you want to
-                    re-chunk the existing documents)?</label>
-                <input name="force_reprocess" type="checkbox" checked><br><br>
+                <label>Force reprocessing:</label>
+                <input name="force_reprocess" type="checkbox"><br><br>
 
                 <input type="submit">
             </form>
@@ -193,112 +230,87 @@ async def main():
 
 
 @app.post("/search")
-async def retrieve_documents(request: SearchRequest) -> dict[str, dict[str, Any]]:
+def retrieve_documents(
+    request: SearchRequest,
+    session: Annotated[Session, Depends(get_db_session)],
+) -> dict[str, dict[str, Any]]:
     try:
         result = {}
-        for i, query in enumerate(request.queries):
+        for index, query in enumerate(request.queries):
             matches = search_similar_chunks(
-                query,
-                request.top_k,
-                request.user_id,
-                request.document_id,
+                session,
+                query=query,
+                top_k=request.top_k,
+                tenant_id=DEMO_TENANT_ID,
+                document_id=request.document_id,
+                borrower_id=request.borrower_id,
+                reporting_period_id=request.reporting_period_id,
+                max_distance=request.max_distance,
             )
-            result[f"query-{i}"] = {
+            result[f"query-{index}"] = {
                 "query": query,
                 "top_k": request.top_k,
-                "user_id": request.user_id,
-                "document_id": request.document_id,
+                "tenant_id": str(DEMO_TENANT_ID),
+                "document_id": (
+                    str(request.document_id)
+                    if request.document_id is not None
+                    else None
+                ),
                 "result": matches,
             }
         return result
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/answer")
-def get_answer_from_llm(request: AskRequest) -> dict[str, Any]:
+def get_answer_from_llm(
+    request: AskRequest,
+    session: Annotated[Session, Depends(get_db_session)],
+) -> dict[str, Any]:
     try:
-        result = generate_answer(
-            request.query,
-            request.top_k,
-            request.user_id,
-            request.document_id,
+        return generate_answer(
+            session,
+            query=request.query,
+            top_k=request.top_k,
+            tenant_id=DEMO_TENANT_ID,
+            document_id=request.document_id,
+            borrower_id=request.borrower_id,
+            reporting_period_id=request.reporting_period_id,
+            max_distance=request.max_distance,
         )
-        return result
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/collection-info")
-def collection_info():
-    collection = get_chroma_collection()
-    all_items = collection.get()
-    ids = all_items["ids"]
+def collection_info(
+    session: Annotated[Session, Depends(get_db_session)],
+) -> dict[str, Any]:
+    document_count = session.scalar(
+        select(func.count())
+        .select_from(Document)
+        .where(Document.tenant_id == DEMO_TENANT_ID)
+    )
+    page_count = session.scalar(
+        select(func.count())
+        .select_from(DocumentPage)
+        .join(Document, Document.id == DocumentPage.document_id)
+        .where(Document.tenant_id == DEMO_TENANT_ID)
+    )
+    chunk_count = session.scalar(
+        select(func.count())
+        .select_from(DocumentChunk)
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .where(Document.tenant_id == DEMO_TENANT_ID)
+    )
     return {
-        # "total_chunks": len(ids),
-        # "unique_chunks": len(set(ids)),
-        # "has_duplicates": len(ids) != len(set(ids)),
-        "count": collection.count(),
-        "items": all_items, 
+        "tenant_id": str(DEMO_TENANT_ID),
+        "document_count": document_count,
+        "page_count": page_count,
+        "chunk_count": chunk_count,
     }
-
-
-@app.delete("/collection/user/{user_id}")
-def clear_user_collection(user_id: str):
-    try:
-        if not user_id.strip():
-            raise HTTPException(status_code=500, detail="missing user_id")
-
-        delete_user_chunks(user_id)
-
-        return {
-            "message": f"All documents for {user_id} have been successfully deleted.",
-            "user_id": user_id,
-        }
-    
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/collection/user/{user_id}/document/{document_id}")
-def clear_user_collection(user_id: str, document_id: str):
-    try:
-        if not user_id.strip():
-            raise HTTPException(status_code=500, detail="missing user_id")
-        
-        if not document_id.strip():
-            raise HTTPException(status_code=500, detail="missing document_id")
-
-        delete_document_chunks(user_id, document_id)
-
-        return {
-            "message": f"All documents for {user_id} have been successfully deleted.",
-            "user_id": user_id,
-        }
-    
-    except HTTPException:
-        raise
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/collection")
-def clear_collection():
-    try:
-        chroma_client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-        chroma_client.delete_collection(CHROMA_COLLECTION_NAME)
-        chroma_client.get_or_create_collection(CHROMA_COLLECTION_NAME)
-        return {"message": "Collection cleared successfully!"}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-

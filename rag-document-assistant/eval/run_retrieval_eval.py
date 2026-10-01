@@ -1,9 +1,12 @@
 import argparse
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
-from app.vector_store import search_similar_chunks
+from app.database import SessionLocal
+from app.demo_seed import DEMO_TENANT_ID
+from app.retrieval_service import search_similar_chunks
 
 
 def load_eval_set(eval_path: str) -> list[dict[str, Any]]:
@@ -23,10 +26,13 @@ def load_eval_set(eval_path: str) -> list[dict[str, Any]]:
 
 def parse_page_span(metadata: dict[str, Any]) -> list[int]:
     """
-    Parse page_span from Chroma metadata
+    Parse page_span from PostgreSQL retrieval metadata.
     """
 
     page_span = metadata.get("page_span")
+
+    if isinstance(page_span, list):
+        return [int(page) for page in page_span]
 
     if isinstance(page_span, str) and page_span.strip():
         return [int(page.strip()) for page in page_span.split(",") if page.strip()]
@@ -34,7 +40,7 @@ def parse_page_span(metadata: dict[str, Any]) -> list[int]:
     start_page = metadata.get("start_page")
     end_page = metadata.get("end_page")
 
-    if start_page is not None and end is not None:
+    if start_page is not None and end_page is not None:
         return list(range(int(start_page), int(end_page) + 1))
 
     return []
@@ -83,10 +89,11 @@ def is_relevant_chunk(
 
 def evaluate_example(
     example: dict[str, Any],
-    user_id: str,
+    session,
+    tenant_id: uuid.UUID,
     top_k: int,
     max_distance: float,
-    document_id: str | None = None,
+    document_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     
     question = example["question"]
@@ -96,11 +103,12 @@ def evaluate_example(
     gold_document_id = example.get("gold_document_id")
 
     retrieved_chunks = search_similar_chunks(
-        question,
-        top_k,
-        user_id,
-        document_id,
-        max_distance,
+        session,
+        query=question,
+        tenant_id=tenant_id,
+        top_k=top_k,
+        document_id=document_id,
+        max_distance=max_distance,
     )
 
     retrieved_page_spans = [
@@ -303,9 +311,9 @@ def main() -> None:
     )
 
     parser.add_argument(
-        "--user-id",
-        required=True,
-        help="User ID whose ingested documents should be searched.",
+        "--tenant-id",
+        default=str(DEMO_TENANT_ID),
+        help="Tenant UUID whose ingested documents should be searched.",
     )
 
     parser.add_argument(
@@ -325,7 +333,7 @@ def main() -> None:
         "--max-distance",
         type=float,
         default=0.8,
-        help="Maximum Chroma distance allowed for retrieved chunks.",
+        help="Maximum pgvector cosine distance allowed for retrieved chunks.",
     )
 
     parser.add_argument(
@@ -338,16 +346,20 @@ def main() -> None:
 
     eval_examples = load_eval_set(args.eval_file)
 
-    results = [
-        evaluate_example(
-            example=example,
-            user_id=args.user_id,
-            top_k=args.top_k,
-            max_distance=args.max_distance,
-            document_id=args.document_id,
-        )
-        for example in eval_examples
-    ]
+    tenant_id = uuid.UUID(args.tenant_id)
+    document_id = uuid.UUID(args.document_id) if args.document_id else None
+    with SessionLocal() as session:
+        results = [
+            evaluate_example(
+                example=example,
+                session=session,
+                tenant_id=tenant_id,
+                top_k=args.top_k,
+                max_distance=args.max_distance,
+                document_id=document_id,
+            )
+            for example in eval_examples
+        ]
 
     for index, result in enumerate(results, start=1):
         print_example_result(index, result)
@@ -366,6 +378,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
-
-    
