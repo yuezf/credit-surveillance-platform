@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 
 from app.api import app
+from app.auth import get_current_tenant_id
 from app.chunking import TextChunk
 from app.database import get_db_session
 from app.document_service import DocumentPersistenceResult
@@ -14,11 +15,13 @@ from app.ingestion import PageText
 class PostgreSQLAPIWiringTests(unittest.TestCase):
     def setUp(self):
         self.session = Mock()
+        self.tenant_id = uuid.uuid4()
 
         def override_database_session():
             yield self.session
 
         app.dependency_overrides[get_db_session] = override_database_session
+        app.dependency_overrides[get_current_tenant_id] = lambda: self.tenant_id
         self.client = TestClient(app)
 
     def tearDown(self):
@@ -55,6 +58,10 @@ class PostgreSQLAPIWiringTests(unittest.TestCase):
 
         response = self.client.post(
             "/ingest",
+            data={
+                "borrower_id": str(uuid.uuid4()),
+                "reporting_period_id": str(uuid.uuid4()),
+            },
             files={"files": ("example.pdf", b"%PDF-test", "application/pdf")},
         )
 
@@ -64,6 +71,7 @@ class PostgreSQLAPIWiringTests(unittest.TestCase):
         self.assertEqual(document["status"], "newly_ingested")
         mock_get_embeddings.assert_called_once_with(["Page text"])
         mock_persist_document.assert_called_once()
+        self.assertEqual(mock_persist_document.call_args.kwargs["tenant_id"], self.tenant_id)
 
     @patch("app.api.search_similar_chunks", return_value=[])
     def test_search_uses_postgres_retrieval_service(self, mock_search):
@@ -76,6 +84,7 @@ class PostgreSQLAPIWiringTests(unittest.TestCase):
         self.assertEqual(response.json()["query-0"]["result"], [])
         mock_search.assert_called_once()
         self.assertIs(mock_search.call_args.args[0], self.session)
+        self.assertEqual(mock_search.call_args.kwargs["tenant_id"], self.tenant_id)
 
     @patch("app.api.generate_answer")
     def test_answer_uses_postgres_backed_rag_service(self, mock_generate_answer):
@@ -94,11 +103,17 @@ class PostgreSQLAPIWiringTests(unittest.TestCase):
         self.assertEqual(response.json()["answer"], "Because EBITDA declined.")
         mock_generate_answer.assert_called_once()
         self.assertIs(mock_generate_answer.call_args.args[0], self.session)
+        self.assertEqual(mock_generate_answer.call_args.kwargs["tenant_id"], self.tenant_id)
 
     def test_ingest_rejects_nonprogressing_chunk_configuration(self):
         response = self.client.post(
             "/ingest",
-            data={"chunk_size": 100, "overlap": 100},
+            data={
+                "borrower_id": str(uuid.uuid4()),
+                "reporting_period_id": str(uuid.uuid4()),
+                "chunk_size": 100,
+                "overlap": 100,
+            },
             files={"files": ("example.pdf", b"%PDF-test", "application/pdf")},
         )
 

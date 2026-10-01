@@ -5,6 +5,7 @@ from app.models import Base, DocumentChunk, FinancialFact
 
 EXPECTED_TABLES = {
     "tenants",
+    "tenant_api_keys",
     "borrowers",
     "reporting_periods",
     "documents",
@@ -19,7 +20,9 @@ class SchemaMetadataTests(unittest.TestCase):
         self.assertEqual(set(Base.metadata.tables), EXPECTED_TABLES)
 
     def test_tenant_scope_is_kept_only_where_needed(self):
-        directly_scoped_tables = {"borrowers", "reporting_periods", "documents"}
+        directly_scoped_tables = {
+            "tenant_api_keys", "borrowers", "reporting_periods", "documents"
+        }
         indirectly_scoped_tables = {
             "document_pages",
             "document_chunks",

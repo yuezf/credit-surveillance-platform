@@ -31,6 +31,21 @@ class Tenant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
 
 
+class TenantAPIKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "tenant_api_keys"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+
 class Borrower(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "borrowers"
     __table_args__ = (

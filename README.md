@@ -179,9 +179,8 @@ Forced reprocessing is intended for cases where the document is unchanged but th
 ### Tenant-scoped retrieval
 
 Every retrieval query joins chunks to their parent document and applies the
-server-owned Demo Tenant ID. Optional document, borrower, and reporting-period
-filters can narrow the search further. Authentication will replace the fixed
-demo scope with a tenant ID derived from verified credentials.
+tenant ID resolved from an active API key. Optional document, borrower, and
+reporting-period filters can narrow the search further; they cannot broaden it.
 
 ### Grounded answer generation
 
@@ -213,8 +212,10 @@ credit-surveillance-platform/
     ├── app/
     │   ├── __init__.py
     │   ├── api.py
+    │   ├── auth.py
     │   ├── chunking.py
     │   ├── configure.py
+    │   ├── create_api_key.py
     │   ├── database.py
     │   ├── demo_seed.py
     │   ├── document_repository.py
@@ -239,6 +240,8 @@ credit-surveillance-platform/
 | Module | Responsibility |
 |---|---|
 | `api.py` | FastAPI endpoints, request models, document hashing, and ingestion orchestration |
+| `auth.py` | API-key verification and server-derived tenant scope |
+| `create_api_key.py` | Issue a tenant key for local setup; displays plaintext once |
 | `ingestion.py` | Page-by-page PDF text extraction |
 | `chunking.py` | Cross-page character chunking and page-span tracking |
 | `database.py` | SQLAlchemy engine, session factory, and database readiness check |
@@ -369,6 +372,22 @@ python -m app.demo_seed
 This creates Demo Tenant, Example Corp, Q1 2025, and Q2 2025. Running the command
 again returns the same IDs and does not create duplicates.
 
+Create a local API key for that tenant (use the tenant UUID printed by the seed):
+
+```bash
+python -m app.create_api_key --tenant-id <demo-tenant-uuid> --label local-demo
+```
+
+The command prints the key once. Save it securely; PostgreSQL stores only its
+SHA-256 hash. Pass the key in the `X-API-Key` header on `/ingest`, `/search`,
+`/answer`, and `/collection-info`. A missing, invalid, or revoked key returns
+HTTP `401`. The server obtains the tenant ID from the key record, never from a
+request field. `/health` and `/health/ready` remain unauthenticated for probes.
+Use HTTPS whenever a key is sent over a network. This is tenant-level service
+authentication, not individual analyst accounts or role-based access control.
+The curl example below assumes you have set `CREDIT_API_KEY` in your shell
+without putting the secret in source control.
+
 Then start the API.
 
 From the `rag-document-assistant/` directory:
@@ -389,7 +408,7 @@ Interactive API documentation:
 http://127.0.0.1:8000/docs
 ```
 
-A basic PDF upload form is available at:
+A landing page with a link to the interactive API docs is available at:
 
 ```text
 http://127.0.0.1:8000/
@@ -444,8 +463,8 @@ Multipart form fields:
 | Field | Type | Required | Description |
 |---|---|---:|---|
 | `files` | PDF file list | Yes | One or more PDF files |
-| `borrower_id` | UUID | No | Defaults to the seeded Example Corp |
-| `reporting_period_id` | UUID | No | Defaults to the seeded current quarter |
+| `borrower_id` | UUID | Yes | Must belong to the authenticated tenant |
+| `reporting_period_id` | UUID | Yes | Must belong to that borrower and tenant |
 | `chunk_size` | Integer | No | Character length of each chunk; default `500` |
 | `overlap` | Integer | No | Character overlap; default `50` |
 | `force_reprocess` | Boolean | No | Rebuild an already-ingested document; default `false` |
@@ -454,7 +473,10 @@ Example:
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/ingest" \
+  -H "X-API-Key: $CREDIT_API_KEY" \
   -F "files=@document.pdf" \
+  -F "borrower_id=<borrower-uuid>" \
+  -F "reporting_period_id=<period-uuid>" \
   -F "chunk_size=500" \
   -F "overlap=50" \
   -F "force_reprocess=false"
@@ -507,7 +529,7 @@ Request:
 ```
 
 `document_id`, `borrower_id`, and `reporting_period_id` are optional. Retrieval is
-always restricted to the server-owned Demo Tenant scope.
+always restricted to the tenant authenticated by `X-API-Key`.
 
 The endpoint returns the matching chunks, metadata, and vector distance without calling the chat model.
 
@@ -561,7 +583,7 @@ Example response shape:
 GET /collection-info
 ```
 
-Returns document, page, and chunk counts for the current Demo Tenant without
+Returns document, page, and chunk counts for the authenticated tenant without
 exposing stored text. The legacy vector-store deletion endpoints have been removed.
 
 ---
@@ -701,20 +723,12 @@ Large PDFs therefore cause:
 - No progress reporting
 - No retry or resume behavior
 
-### Demo-only tenant identity
+### Tenant API-key identity
 
-The current API uses a fixed, server-owned Demo Tenant ID.
-
-There is no:
-
-- Authentication
-- Authorization
-- Signed identity token
-- Ownership verification
-- Role-based access control
-
-Authentication must replace the demo constant with a tenant derived from verified
-credentials before private deployment.
+The API authenticates tenant-scoped service keys against PostgreSQL and applies
+that tenant to ingestion, search, answers, and diagnostic counts. Keys can be
+revoked by setting `tenant_api_keys.is_active` to `false`. Individual users,
+roles, key-rotation automation, and request rate limits are not implemented yet.
 
 ### Fixed retrieval threshold
 
@@ -775,8 +789,8 @@ The application does not yet record:
 
 ### Development-only diagnostic endpoint
 
-`/collection-info` exposes aggregate counts for the Demo Tenant. It should be
-protected or removed before deployment.
+`/collection-info` exposes aggregate counts only for the authenticated tenant.
+Its diagnostic value should be reassessed before deployment.
 
 ---
 
@@ -793,7 +807,7 @@ protected or removed before deployment.
 | Forced reprocessing fails | PostgreSQL rolls back to the previous pages and chunks | Add retries and structured failure records |
 | Weak retrieval evidence | LLM may still be called | Pre-generation confidence gate |
 | Similar filenames | Filenames are ambiguous | Use document IDs internally |
-| Missing authentication | API operates only in fixed Demo Tenant scope | Authentication-derived tenant identity |
+| Missing or revoked API key | Protected endpoints return HTTP 401 | Add individual identity and roles when human review exists |
 | Malicious document instructions | May influence generation | Prompt-injection filtering and trust boundaries |
 | Poor distance threshold | Missed evidence or noisy context | Offline threshold calibration |
 | Embedding model changes | Old and new embeddings may be incompatible | Store model/version metadata and reindex |
@@ -902,8 +916,8 @@ A production deployment should add the following controls.
 
 ### Authentication and authorization
 
-- Authenticate every request
-- Derive `tenant_id` from the authenticated identity
+- Authenticate tenant-facing requests with API keys; health probes remain public
+- Derive `tenant_id` from the authenticated key record
 - Never trust a tenant ID supplied in a request body
 - Verify document ownership for search, answer, and deletion
 - Protect administrative endpoints separately
@@ -939,7 +953,7 @@ A production deployment should add the following controls.
 - Rate-limit ingestion and generation endpoints
 - Add request-size limits
 - Add timeouts and cancellation
-- Protect `/collection-info`
+- Keep `/collection-info` scoped to the authenticated tenant
 - Return safe error messages without leaking internal paths or secrets
 
 ### Secret management
@@ -955,16 +969,15 @@ A production deployment should add the following controls.
 
 Priority order:
 
-1. Add authentication and derive tenant scope from verified credentials
-2. Deploy privately with persistent PostgreSQL, vector, and original-file storage
-3. Move ingestion into background jobs
-4. Seed one borrower with two periods of financial facts
-5. Calculate leverage and detect one exception in deterministic code
-6. Build one bounded analyst agent to investigate that exception
-7. Persist its runs, tool calls, evidence, and termination reasons
-8. Add retries, timeouts, idempotency, tracing, and agent evaluations
-9. Add human review and approval
-10. Expand credit metrics, policies, extraction, and retrieval only after the thin workflow works
+1. Deploy privately with persistent PostgreSQL, vector, and original-file storage
+2. Move ingestion into background jobs
+3. Seed one borrower with two periods of financial facts
+4. Calculate leverage and detect one exception in deterministic code
+5. Build one bounded analyst agent to investigate that exception
+6. Persist its runs, tool calls, evidence, and termination reasons
+7. Add retries, timeouts, idempotency, tracing, and agent evaluations
+8. Add human review and approval
+9. Expand credit metrics, policies, extraction, and retrieval only after the thin workflow works
 
 Later retrieval improvements may include keyword search, reranking, evidence gating, and citation validation. The current retrieval path remains semantic search over pgvector.
 

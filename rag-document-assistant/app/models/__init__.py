@@ -7,11 +7,13 @@ from app.models.entities import (
     FinancialFact,
     ReportingPeriod,
     Tenant,
+    TenantAPIKey,
 )
 
 __all__ = [
     "Base",
     "Tenant",
+    "TenantAPIKey",
     "Borrower",
     "ReportingPeriod",
     "Document",

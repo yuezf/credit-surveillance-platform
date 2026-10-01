@@ -11,14 +11,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_tenant_id
 from app.chunking import chunking_across_pages
 from app.configure import EMBEDDING_MODEL
 from app.database import check_database_connection, get_db_session
-from app.demo_seed import (
-    DEMO_BORROWER_ID,
-    DEMO_CURRENT_PERIOD_ID,
-    DEMO_TENANT_ID,
-)
 from app.document_repository import credit_scope_exists, get_document_by_hash
 from app.document_service import persist_document
 from app.embedding_service import get_embeddings_in_batches
@@ -80,8 +76,9 @@ def readiness_check() -> dict[str, str]:
 def ingest_pdf(
     files: Annotated[list[UploadFile], File()],
     session: Annotated[Session, Depends(get_db_session)],
-    borrower_id: Annotated[uuid.UUID, Form()] = DEMO_BORROWER_ID,
-    reporting_period_id: Annotated[uuid.UUID, Form()] = DEMO_CURRENT_PERIOD_ID,
+    tenant_id: Annotated[uuid.UUID, Depends(get_current_tenant_id)],
+    borrower_id: Annotated[uuid.UUID, Form()],
+    reporting_period_id: Annotated[uuid.UUID, Form()],
     chunk_size: Annotated[int, Form(gt=0)] = 500,
     overlap: Annotated[int, Form(ge=0)] = 50,
     force_reprocess: Annotated[bool, Form()] = False,
@@ -93,13 +90,13 @@ def ingest_pdf(
         )
     if not credit_scope_exists(
         session,
-        tenant_id=DEMO_TENANT_ID,
+        tenant_id=tenant_id,
         borrower_id=borrower_id,
         reporting_period_id=reporting_period_id,
     ):
         raise HTTPException(
             status_code=400,
-            detail="Unknown borrower/reporting-period combination; run the demo seed",
+            detail="Unknown borrower/reporting-period combination",
         )
 
     results = []
@@ -116,14 +113,14 @@ def ingest_pdf(
             document_hash = compute_file_hash(temp_path)
             existing_document = get_document_by_hash(
                 session,
-                tenant_id=DEMO_TENANT_ID,
+                tenant_id=tenant_id,
                 content_hash=document_hash,
             )
             if existing_document is not None and not force_reprocess:
                 results.append(
                     {
                         "filename": file.filename,
-                        "tenant_id": str(DEMO_TENANT_ID),
+                        "tenant_id": str(tenant_id),
                         "borrower_id": str(existing_document.borrower_id),
                         "reporting_period_id": str(
                             existing_document.reporting_period_id
@@ -142,7 +139,7 @@ def ingest_pdf(
             )
             persistence = persist_document(
                 session,
-                tenant_id=DEMO_TENANT_ID,
+                tenant_id=tenant_id,
                 borrower_id=borrower_id,
                 reporting_period_id=reporting_period_id,
                 original_filename=file.filename,
@@ -158,7 +155,7 @@ def ingest_pdf(
             results.append(
                 {
                     "filename": file.filename,
-                    "tenant_id": str(DEMO_TENANT_ID),
+                    "tenant_id": str(tenant_id),
                     "borrower_id": str(borrower_id),
                     "reporting_period_id": str(reporting_period_id),
                     "document_id": str(persistence.document_id),
@@ -187,7 +184,7 @@ def ingest_pdf(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Document ingestion failed") from exc
         finally:
             if temp_path is not None:
                 Path(temp_path).unlink(missing_ok=True)
@@ -197,32 +194,11 @@ def ingest_pdf(
 
 @app.get("/")
 async def main() -> HTMLResponse:
-    content = f"""
+    content = """
     <html>
         <body>
-            <h2>Ingest PDFs into PostgreSQL/pgvector</h2>
-            <p>Tenant: Demo Tenant ({DEMO_TENANT_ID})</p>
-            <form action="/ingest" enctype="multipart/form-data" method="post">
-                <label>Borrower ID:</label>
-                <input name="borrower_id" type="text" value="{DEMO_BORROWER_ID}"><br><br>
-
-                <label>Reporting period ID:</label>
-                <input name="reporting_period_id" type="text" value="{DEMO_CURRENT_PERIOD_ID}"><br><br>
-
-                <label>Select PDF files:</label>
-                <input name="files" type="file" multiple><br><br>
-
-                <label>Chunk size:</label>
-                <input name="chunk_size" type="number" value="500"><br><br>
-
-                <label>Overlap:</label>
-                <input name="overlap" type="number" value="50"><br><br>
-
-                <label>Force reprocessing:</label>
-                <input name="force_reprocess" type="checkbox"><br><br>
-
-                <input type="submit">
-            </form>
+            <h2>Credit Surveillance Platform</h2>
+            <p>Use <a href="/docs">API docs</a> with a tenant API key.</p>
         </body>
     </html>
     """
@@ -233,6 +209,7 @@ async def main() -> HTMLResponse:
 def retrieve_documents(
     request: SearchRequest,
     session: Annotated[Session, Depends(get_db_session)],
+    tenant_id: Annotated[uuid.UUID, Depends(get_current_tenant_id)],
 ) -> dict[str, dict[str, Any]]:
     try:
         result = {}
@@ -241,7 +218,7 @@ def retrieve_documents(
                 session,
                 query=query,
                 top_k=request.top_k,
-                tenant_id=DEMO_TENANT_ID,
+                tenant_id=tenant_id,
                 document_id=request.document_id,
                 borrower_id=request.borrower_id,
                 reporting_period_id=request.reporting_period_id,
@@ -250,7 +227,7 @@ def retrieve_documents(
             result[f"query-{index}"] = {
                 "query": query,
                 "top_k": request.top_k,
-                "tenant_id": str(DEMO_TENANT_ID),
+                "tenant_id": str(tenant_id),
                 "document_id": (
                     str(request.document_id)
                     if request.document_id is not None
@@ -262,20 +239,21 @@ def retrieve_documents(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Document search failed") from exc
 
 
 @app.post("/answer")
 def get_answer_from_llm(
     request: AskRequest,
     session: Annotated[Session, Depends(get_db_session)],
+    tenant_id: Annotated[uuid.UUID, Depends(get_current_tenant_id)],
 ) -> dict[str, Any]:
     try:
         return generate_answer(
             session,
             query=request.query,
             top_k=request.top_k,
-            tenant_id=DEMO_TENANT_ID,
+            tenant_id=tenant_id,
             document_id=request.document_id,
             borrower_id=request.borrower_id,
             reporting_period_id=request.reporting_period_id,
@@ -284,32 +262,33 @@ def get_answer_from_llm(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Answer generation failed") from exc
 
 
 @app.get("/collection-info")
 def collection_info(
     session: Annotated[Session, Depends(get_db_session)],
+    tenant_id: Annotated[uuid.UUID, Depends(get_current_tenant_id)],
 ) -> dict[str, Any]:
     document_count = session.scalar(
         select(func.count())
         .select_from(Document)
-        .where(Document.tenant_id == DEMO_TENANT_ID)
+        .where(Document.tenant_id == tenant_id)
     )
     page_count = session.scalar(
         select(func.count())
         .select_from(DocumentPage)
         .join(Document, Document.id == DocumentPage.document_id)
-        .where(Document.tenant_id == DEMO_TENANT_ID)
+        .where(Document.tenant_id == tenant_id)
     )
     chunk_count = session.scalar(
         select(func.count())
         .select_from(DocumentChunk)
         .join(Document, Document.id == DocumentChunk.document_id)
-        .where(Document.tenant_id == DEMO_TENANT_ID)
+        .where(Document.tenant_id == tenant_id)
     )
     return {
-        "tenant_id": str(DEMO_TENANT_ID),
+        "tenant_id": str(tenant_id),
         "document_count": document_count,
         "page_count": page_count,
         "chunk_count": chunk_count,
