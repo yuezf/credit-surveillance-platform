@@ -110,6 +110,7 @@ Question
 - Rejects files whose names do not end in `.pdf`
 - Uses temporary files during extraction
 - Deletes temporary files after processing
+- Saves the original PDF to durable storage before recording its URI
 - Supports configurable chunk size and overlap
 
 ### Page-aware, cross-page chunking
@@ -203,6 +204,11 @@ PostgreSQL stores document metadata, exact page text, chunks, and 768-dimensiona
 embeddings. A local Docker volume preserves development data; Amazon RDS will
 provide durable production storage.
 
+Original PDF bytes are stored separately: under `rag-document-assistant/data/originals/`
+for local development, or in a private S3 bucket when configured for deployment.
+The database records the resulting `storage_uri`. Object names derive from the
+authenticated tenant ID and SHA-256 file hash, not from client filenames.
+
 ## Project Structure
 
 ```text
@@ -224,6 +230,7 @@ credit-surveillance-platform/
     │   ├── embedding_utils.py
     │   ├── ingestion.py
     │   ├── models/
+    │   ├── original_storage.py
     │   ├── rag.py
     │   └── retrieval_service.py
     ├── migrations/
@@ -247,6 +254,7 @@ credit-surveillance-platform/
 | `database.py` | SQLAlchemy engine, session factory, and database readiness check |
 | `document_repository.py` | SQLAlchemy document/page/chunk operations and tenant-scoped pgvector search |
 | `document_service.py` | Transactional persistence, validation, deterministic IDs, and reprocessing |
+| `original_storage.py` | Local or S3 storage for original PDF bytes |
 | `embedding_service.py` | Batched 768-dimensional embedding requests |
 | `retrieval_service.py` | Query embedding and conversion of pgvector matches into the RAG result shape |
 | `rag.py` | Context construction, grounded prompting, answer generation, and source formatting |
@@ -305,6 +313,12 @@ EMBEDDING_DIMENSION=768
 ```
 
 The application also requires `DATABASE_URL`. The example file contains local PostgreSQL defaults. Your embedding endpoint must accept the `dimensions` request parameter used by this application.
+
+`ORIGINAL_PDF_STORAGE_BACKEND` defaults to `local`, writing to the git-ignored
+`data/originals/` directory. Set `ORIGINAL_PDF_LOCAL_ROOT` to another persistent
+path if needed. For cloud deployment, set `ORIGINAL_PDF_STORAGE_BACKEND=s3` and
+`ORIGINAL_PDF_S3_BUCKET` to a private bucket; the application uses the AWS SDK
+credential chain, so an ECS task should receive a narrowly scoped task role.
 
 Do not commit `.env` files or secrets to version control.
 
@@ -848,11 +862,13 @@ This will improve:
 - Throughput tuning
 - Handling of unusually large chunks or documents
 
-### 3. Preserve original PDF files
+### 3. Reconcile object and database state
 
-The current PostgreSQL document registry stores metadata, page text, and chunks, but ingestion deletes its temporary PDF after processing. Add durable object storage for original uploads so they can be inspected and reprocessed later.
-
-Store the object URI in `documents.storage_uri`, and keep the database as the source of truth for document metadata and lifecycle state.
+The original PDF is uploaded before its URI is committed to PostgreSQL. If that
+commit fails, retrying the same file reuses its deterministic object key, but an
+unreferenced object can remain until a reconciliation or cleanup job is added.
+Older documents can acquire a missing URI on duplicate upload without being
+re-embedded. The database remains the source of truth for document metadata.
 
 ### 4. Use versioned ingestion
 

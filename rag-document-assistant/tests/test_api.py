@@ -16,6 +16,10 @@ class PostgreSQLAPIWiringTests(unittest.TestCase):
     def setUp(self):
         self.session = Mock()
         self.tenant_id = uuid.uuid4()
+        storage_patcher = patch("app.api.get_original_pdf_store")
+        self.original_store = storage_patcher.start().return_value
+        self.original_store.put_pdf.return_value = "s3://test-bucket/original.pdf"
+        self.addCleanup(storage_patcher.stop)
 
         def override_database_session():
             yield self.session
@@ -72,6 +76,71 @@ class PostgreSQLAPIWiringTests(unittest.TestCase):
         mock_get_embeddings.assert_called_once_with(["Page text"])
         mock_persist_document.assert_called_once()
         self.assertEqual(mock_persist_document.call_args.kwargs["tenant_id"], self.tenant_id)
+        self.assertEqual(
+            mock_persist_document.call_args.kwargs["storage_uri"],
+            "s3://test-bucket/original.pdf",
+        )
+
+    @patch("app.api.persist_document")
+    @patch("app.api.get_document_by_hash")
+    @patch("app.api.credit_scope_exists", return_value=True)
+    def test_duplicate_without_original_is_backfilled_without_reembedding(
+        self, _mock_scope, mock_existing, mock_persist_document
+    ):
+        document_id = uuid.uuid4()
+        mock_existing.return_value = Mock(
+            id=document_id,
+            borrower_id=uuid.uuid4(),
+            reporting_period_id=uuid.uuid4(),
+            storage_uri=None,
+        )
+
+        with patch("app.api.get_embeddings_in_batches") as mock_embeddings:
+            response = self.client.post(
+                "/ingest",
+                data={
+                    "borrower_id": str(mock_existing.return_value.borrower_id),
+                    "reporting_period_id": str(
+                        mock_existing.return_value.reporting_period_id
+                    ),
+                },
+                files={"files": ("example.pdf", b"%PDF-test", "application/pdf")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["documents"][0]["status"], "skipped_already_ingested"
+        )
+        mock_embeddings.assert_not_called()
+        self.original_store.put_pdf.assert_called_once()
+        self.assertEqual(mock_persist_document.call_args.kwargs["pages"], [])
+        self.assertEqual(
+            mock_persist_document.call_args.kwargs["storage_uri"],
+            "s3://test-bucket/original.pdf",
+        )
+
+    @patch("app.api.persist_document")
+    @patch("app.api.get_embeddings_in_batches", return_value=[[1.0] + [0.0] * 767])
+    @patch("app.api.chunking_across_pages", return_value=[TextChunk("Text", 1, 1, [1], 0)])
+    @patch("app.api.extract_pages_from_pdf", return_value=[PageText(1, "Text")])
+    @patch("app.api.get_document_by_hash", return_value=None)
+    @patch("app.api.credit_scope_exists", return_value=True)
+    def test_storage_failure_prevents_document_commit(
+        self, _mock_scope, _mock_existing, _mock_pages, _mock_chunks,
+        _mock_embeddings, mock_persist_document
+    ):
+        self.original_store.put_pdf.side_effect = RuntimeError("storage unavailable")
+        response = self.client.post(
+            "/ingest",
+            data={
+                "borrower_id": str(uuid.uuid4()),
+                "reporting_period_id": str(uuid.uuid4()),
+            },
+            files={"files": ("example.pdf", b"%PDF-test", "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Document ingestion failed")
+        mock_persist_document.assert_not_called()
 
     @patch("app.api.search_similar_chunks", return_value=[])
     def test_search_uses_postgres_retrieval_service(self, mock_search):

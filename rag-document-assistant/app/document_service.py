@@ -104,6 +104,8 @@ def persist_document(
             content_hash=normalized_hash,
         )
         if existing_document is not None and not force_reprocess:
+            if storage_uri is not None and existing_document.storage_uri is None:
+                existing_document.storage_uri = storage_uri
             session.commit()
             return DocumentPersistenceResult(
                 document_id=existing_document.id,
@@ -150,7 +152,8 @@ def persist_document(
             document.media_type = media_type
             document.document_type = document_type
             document.byte_size = byte_size
-            document.storage_uri = storage_uri
+            if storage_uri is not None:
+                document.storage_uri = storage_uri
             document.status = "processing"
             outcome = "reprocessed"
 

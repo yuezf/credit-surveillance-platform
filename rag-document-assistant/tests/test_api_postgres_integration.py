@@ -1,7 +1,9 @@
 import hashlib
 import os
+import tempfile
 import unittest
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -19,6 +21,7 @@ from app.demo_seed import (
 )
 from app.ingestion import PageText
 from app.models import Document, Tenant, TenantAPIKey
+from app.original_storage import LocalOriginalPDFStore
 
 
 @unittest.skipUnless(
@@ -41,12 +44,20 @@ class PostgreSQLAPIIntegrationTests(unittest.TestCase):
                 session, cls.other_tenant_id, "Other API integration test"
             )
         cls.client = TestClient(app)
+        cls.storage_dir = tempfile.TemporaryDirectory()
+        cls.storage_patcher = patch(
+            "app.api.get_original_pdf_store",
+            return_value=LocalOriginalPDFStore(Path(cls.storage_dir.name)),
+        )
+        cls.storage_patcher.start()
         cls.pdf_bytes = b"%PDF-postgres-api-integration"
         cls.content_hash = hashlib.sha256(cls.pdf_bytes).hexdigest()
         cls.embedding = [1.0] + [0.0] * 767
 
     @classmethod
     def tearDownClass(cls):
+        cls.storage_patcher.stop()
+        cls.storage_dir.cleanup()
         with cls.SessionLocal.begin() as session:
             session.execute(
                 delete(Document).where(
@@ -106,6 +117,14 @@ class PostgreSQLAPIIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(ingest_response.status_code, 200)
         document_id = ingest_response.json()["documents"][0]["document_id"]
+
+        with self.SessionLocal() as session:
+            document = session.get(Document, uuid.UUID(document_id))
+            self.assertTrue(document.storage_uri.startswith("file://"))
+            self.assertEqual(
+                Path(document.storage_uri.removeprefix("file://")).read_bytes(),
+                self.pdf_bytes,
+            )
 
         with patch(
             "app.retrieval_service.get_embeddings",

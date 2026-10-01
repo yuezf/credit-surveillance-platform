@@ -193,6 +193,7 @@ class PostgreSQLDocumentStoreTests(unittest.TestCase):
                 chunks=replacement_chunks,
                 embeddings=embedding,
                 embedding_model="test-embedding-model",
+                storage_uri="s3://test-bucket/original.pdf",
             )
         with self.SessionLocal() as session:
             reprocessed = persist_document(
@@ -216,6 +217,10 @@ class PostgreSQLDocumentStoreTests(unittest.TestCase):
         self.assertEqual(created.document_id, reprocessed.document_id)
 
         with self.SessionLocal() as session:
+            self.assertEqual(
+                session.get(Document, created.document_id).storage_uri,
+                "s3://test-bucket/original.pdf",
+            )
             page = get_document_page(
                 session,
                 tenant_id=self.tenant_id,

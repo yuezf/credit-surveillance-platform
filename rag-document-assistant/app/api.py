@@ -20,6 +20,7 @@ from app.document_service import persist_document
 from app.embedding_service import get_embeddings_in_batches
 from app.ingestion import extract_pages_from_pdf
 from app.models import Document, DocumentChunk, DocumentPage
+from app.original_storage import get_original_pdf_store
 from app.rag import generate_answer
 from app.retrieval_service import search_similar_chunks
 
@@ -100,6 +101,7 @@ def ingest_pdf(
         )
 
     results = []
+    original_store = get_original_pdf_store()
     for file in files:
         if not file.filename or not file.filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Only PDFs are supported")
@@ -117,6 +119,24 @@ def ingest_pdf(
                 content_hash=document_hash,
             )
             if existing_document is not None and not force_reprocess:
+                if existing_document.storage_uri is None:
+                    storage_uri = original_store.put_pdf(
+                        Path(temp_path), tenant_id, document_hash
+                    )
+                    persist_document(
+                        session,
+                        tenant_id=tenant_id,
+                        borrower_id=borrower_id,
+                        reporting_period_id=reporting_period_id,
+                        original_filename=file.filename,
+                        content_hash=document_hash,
+                        byte_size=Path(temp_path).stat().st_size,
+                        pages=[],
+                        chunks=[],
+                        embeddings=[],
+                        embedding_model=EMBEDDING_MODEL,
+                        storage_uri=storage_uri,
+                    )
                 results.append(
                     {
                         "filename": file.filename,
@@ -137,6 +157,9 @@ def ingest_pdf(
             embeddings = get_embeddings_in_batches(
                 [chunk.text for chunk in chunks]
             )
+            storage_uri = original_store.put_pdf(
+                Path(temp_path), tenant_id, document_hash
+            )
             persistence = persist_document(
                 session,
                 tenant_id=tenant_id,
@@ -149,6 +172,7 @@ def ingest_pdf(
                 chunks=chunks,
                 embeddings=embeddings,
                 embedding_model=EMBEDDING_MODEL,
+                storage_uri=storage_uri,
                 force_reprocess=force_reprocess,
             )
 
