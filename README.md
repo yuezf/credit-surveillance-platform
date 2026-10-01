@@ -354,6 +354,12 @@ a running database:
 RUN_DATABASE_TESTS=1 python -m unittest tests.test_document_repository_integration -v
 ```
 
+GitHub Actions runs the unit suite and both PostgreSQL integration-test modules
+on pushes and pull requests to `main`. Its fresh pgvector service is migrated
+with Alembic before tests run, and `alembic check` detects model/schema drift.
+The CI model settings are placeholders; tests mock external model calls and do
+not require API credentials.
+
 Create the idempotent local demo scope required by document ingestion:
 
 ```bash
@@ -949,17 +955,16 @@ A production deployment should add the following controls.
 
 Priority order:
 
-1. Run deterministic unit and PostgreSQL integration tests in CI
-2. Add authentication and derive tenant scope from verified credentials
-3. Deploy privately with persistent PostgreSQL, vector, and original-file storage
-4. Move ingestion into background jobs
-5. Seed one borrower with two periods of financial facts
-6. Calculate leverage and detect one exception in deterministic code
-7. Build one bounded analyst agent to investigate that exception
-8. Persist its runs, tool calls, evidence, and termination reasons
-9. Add retries, timeouts, idempotency, tracing, and agent evaluations
-10. Add human review and approval
-11. Expand credit metrics, policies, extraction, and retrieval only after the thin workflow works
+1. Add authentication and derive tenant scope from verified credentials
+2. Deploy privately with persistent PostgreSQL, vector, and original-file storage
+3. Move ingestion into background jobs
+4. Seed one borrower with two periods of financial facts
+5. Calculate leverage and detect one exception in deterministic code
+6. Build one bounded analyst agent to investigate that exception
+7. Persist its runs, tool calls, evidence, and termination reasons
+8. Add retries, timeouts, idempotency, tracing, and agent evaluations
+9. Add human review and approval
+10. Expand credit metrics, policies, extraction, and retrieval only after the thin workflow works
 
 Later retrieval improvements may include keyword search, reranking, evidence gating, and citation validation. The current retrieval path remains semantic search over pgvector.
 
@@ -981,7 +986,9 @@ query
 
 ## Testing Strategy
 
-The repository includes unit tests and opt-in PostgreSQL integration tests. CI automation and broader credit-workflow evaluations remain planned. Current and future coverage includes:
+The repository includes unit tests and opt-in PostgreSQL integration tests that
+also run in CI. Broader credit-workflow evaluations remain planned. Current and
+future coverage includes:
 
 ### Unit tests
 
