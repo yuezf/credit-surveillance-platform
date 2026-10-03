@@ -4,7 +4,7 @@ A developing credit surveillance platform built on a PDF retrieval-augmented gen
 
 This repository continues the work in [Chat-with-PDF-RAG-System](https://github.com/yuezf/Chat-with-PDF-RAG-System). That repository preserves the original PDF RAG demo; this one carries its Git history forward as the architecture develops into a credit surveillance product.
 
-> **Status:** RAG persistence and retrieval foundation implemented. Financial-fact extraction, leverage calculations, exception detection, agent investigation, and human review are planned, not yet implemented. The API currently uses one fixed demo tenant and synchronous ingestion.
+> **Status:** RAG persistence and retrieval foundation implemented. Financial-fact extraction, leverage calculations, exception detection, agent investigation, and human review are planned, not yet implemented. The API currently uses tenant-scoped API keys and synchronous ingestion.
 
 The intended first credit workflow is deliberately narrow:
 
