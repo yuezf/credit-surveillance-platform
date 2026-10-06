@@ -4,7 +4,29 @@ A developing credit surveillance platform built on a PDF retrieval-augmented gen
 
 This repository continues the work in [Chat-with-PDF-RAG-System](https://github.com/yuezf/Chat-with-PDF-RAG-System). That repository preserves the original PDF RAG demo; this one carries its Git history forward as the architecture develops into a credit surveillance product.
 
-> **Status:** RAG persistence and retrieval foundation implemented. Financial-fact extraction, leverage calculations, exception detection, agent investigation, and human review are planned, not yet implemented. The API currently uses tenant-scoped API keys and synchronous ingestion.
+> **Status:** RAG persistence and retrieval foundation implemented and verified in an AWS deployment lab. Financial-fact extraction, leverage calculations, exception detection, agent investigation, and human review are planned, not yet implemented. The API currently uses tenant-scoped API keys and synchronous ingestion.
+
+## Verified AWS deployment lab
+
+The current RAG API was deployed and tested in `us-east-2` using ECS Fargate,
+private RDS PostgreSQL/pgvector, and private S3 original-PDF storage. The lab used
+IAM roles, Secrets Manager, a restricted application database login, and verified
+HTTPS with tenant API-key authentication.
+
+A synthetic PDF was ingested, searched, and answered with page/source references.
+The S3 download matched the original SHA-256 hash. After a forced ECS deployment,
+the replacement task returned the same document and chunks without re-ingestion.
+
+- [Architecture and deployment walkthrough](docs/aws-rag-lab/README.md)
+- [Verification evidence and sample answer](docs/aws-rag-lab/verification.md)
+- [Cost assumptions and complete teardown checklist](docs/aws-rag-lab/cost-and-teardown.md)
+- [Synthetic test PDF](docs/aws-rag-lab/fixtures/synthetic-examplecorp-q2-2025.pdf)
+
+This is a short-lived deployment lab, not a live public demo or a production
+availability claim. Browser access and credit-surveillance agents are deferred.
+**As of the October 5, 2026 verification, teardown and the final Billing check
+were pending.** The checked-in material is a sanitized manual reference, not an
+automated infrastructure stack.
 
 The intended first credit workflow is deliberately narrow:
 
@@ -201,8 +223,9 @@ The API response includes both the generated answer and the supporting sources.
 ### Persistent document and vector storage
 
 PostgreSQL stores document metadata, exact page text, chunks, and 768-dimensional
-embeddings. A local Docker volume preserves development data; Amazon RDS will
-provide durable production storage.
+embeddings. A local Docker volume preserves development data. The AWS lab
+verified persistence in private Amazon RDS across application-task replacement;
+production backup and restore validation remains future work.
 
 Original PDF bytes are stored separately: under `rag-document-assistant/data/originals/`
 for local development, or in a private S3 bucket when configured for deployment.
@@ -916,13 +939,16 @@ Record structured metrics and traces for:
 
 ### 8. Automate delivery
 
-The repository already contains a local PostgreSQL Compose service and an API Dockerfile. Remaining delivery work includes:
+The repository already contains a local PostgreSQL Compose service, an API
+Dockerfile, and GitHub Actions unit tests, PostgreSQL integration tests, and
+Alembic drift checks. The [AWS lab](docs/aws-rag-lab/README.md) records a verified
+manual deployment and sanitized configuration reference. Remaining delivery work
+includes:
 
-- CI checks
-- Automated database integration tests
+- Infrastructure as code and automated cloud deployment
 - Dependency scanning
-- Deployment configuration
-- Environment-specific settings
+- Environment-specific settings and deployment gates
+- Backup/restore tests and operational alerts
 
 ---
 
@@ -985,7 +1011,7 @@ A production deployment should add the following controls.
 
 Priority order:
 
-1. Deploy privately with persistent PostgreSQL, vector, and original-file storage
+1. Complete AWS lab teardown and Billing verification; persistent PostgreSQL, vector, and original-file storage have been verified in the lab
 2. Move ingestion into background jobs
 3. Seed one borrower with two periods of financial facts
 4. Calculate leverage and detect one exception in deterministic code

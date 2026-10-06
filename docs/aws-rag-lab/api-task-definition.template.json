@@ -1,0 +1,109 @@
+{
+  "family": "rag-credit-lab-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/<EXECUTION_ROLE>",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/<TASK_ROLE>",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/<ECR_REPOSITORY>@sha256:<IMAGE_DIGEST>",
+      "essential": true,
+      "user": "10001:10001",
+      "portMappings": [
+        {
+          "containerPort": 8443,
+          "hostPort": 8443,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "MODEL_BASE_URL",
+          "value": "https://generativelanguage.googleapis.com/v1beta/openai/"
+        },
+        {
+          "name": "LLM_MODEL",
+          "value": "gemini-3.6-flash"
+        },
+        {
+          "name": "EMBEDDING_MODEL",
+          "value": "gemini-embedding-001"
+        },
+        {
+          "name": "EMBEDDING_DIMENSION",
+          "value": "768"
+        },
+        {
+          "name": "ORIGINAL_PDF_STORAGE_BACKEND",
+          "value": "s3"
+        },
+        {
+          "name": "ORIGINAL_PDF_S3_BUCKET",
+          "value": "<PRIVATE_PDF_BUCKET>"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "us-east-2"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:<ACCOUNT_ID>:secret:<DATABASE_SECRET_NAME_AND_SUFFIX>:DATABASE_URL::"
+        },
+        {
+          "name": "MODEL_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:<ACCOUNT_ID>:secret:<MODEL_SECRET_NAME_AND_SUFFIX>:MODEL_API_KEY::"
+        },
+        {
+          "name": "LAB_TLS_MATERIAL_JSON",
+          "valueFrom": "arn:aws:secretsmanager:us-east-2:<ACCOUNT_ID>:secret:<TLS_SECRET_NAME_AND_SUFFIX>"
+        }
+      ],
+      "linuxParameters": {
+        "capabilities": {
+          "drop": [
+            "ALL"
+          ]
+        },
+        "initProcessEnabled": true
+      },
+      "healthCheck": {
+        "command": [
+          "CMD",
+          "python",
+          "/app/lab_health.py"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/rag-credit-lab",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "api",
+          "mode": "non-blocking",
+          "max-buffer-size": "1m"
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "key": "Project",
+      "value": "rag-credit-lab"
+    }
+  ]
+}

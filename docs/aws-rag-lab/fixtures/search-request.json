@@ -1,0 +1,9 @@
+{
+  "queries": [
+    "What were ExampleCorp revenue and adjusted EBITDA in Q2 2025?",
+    "Why was the Harbor expansion delayed, and when is completion planned?"
+  ],
+  "top_k": 2,
+  "document_id": "cf19b7fc-8af6-55da-8f0a-a79a4c657d56",
+  "max_distance": null
+}
