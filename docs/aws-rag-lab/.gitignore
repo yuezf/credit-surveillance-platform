@@ -1,0 +1,5 @@
+# Machine-specific values and private TLS/client material stay out of Git.
+local/
+*.pem
+*.key
+api-key-header.txt
