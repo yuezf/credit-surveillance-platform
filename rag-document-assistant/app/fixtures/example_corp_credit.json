@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "periods": [
+    {
+      "label": "Q1 2025",
+      "page": 1,
+      "facts": [
+        {
+          "metric": "revenue",
+          "value": "2400000000",
+          "basis": "ttm",
+          "measurement_start": "2024-04-01",
+          "measurement_end": "2025-03-31",
+          "source_text": "TTM revenue: USD 2,400 million"
+        },
+        {
+          "metric": "total_debt",
+          "value": "1500000000",
+          "basis": "point_in_time",
+          "measurement_start": null,
+          "measurement_end": "2025-03-31",
+          "source_text": "Total debt at quarter-end: USD 1,500 million"
+        },
+        {
+          "metric": "ebitda",
+          "value": "400000000",
+          "basis": "ttm",
+          "measurement_start": "2024-04-01",
+          "measurement_end": "2025-03-31",
+          "source_text": "TTM EBITDA: USD 400 million"
+        },
+        {
+          "metric": "interest_expense",
+          "value": "80000000",
+          "basis": "ttm",
+          "measurement_start": "2024-04-01",
+          "measurement_end": "2025-03-31",
+          "source_text": "TTM interest expense: USD 80 million"
+        }
+      ]
+    },
+    {
+      "label": "Q2 2025",
+      "page": 2,
+      "facts": [
+        {
+          "metric": "revenue",
+          "value": "2200000000",
+          "basis": "ttm",
+          "measurement_start": "2024-07-01",
+          "measurement_end": "2025-06-30",
+          "source_text": "TTM revenue: USD 2,200 million"
+        },
+        {
+          "metric": "total_debt",
+          "value": "1600000000",
+          "basis": "point_in_time",
+          "measurement_start": null,
+          "measurement_end": "2025-06-30",
+          "source_text": "Total debt at quarter-end: USD 1,600 million"
+        },
+        {
+          "metric": "ebitda",
+          "value": "330000000",
+          "basis": "ttm",
+          "measurement_start": "2024-07-01",
+          "measurement_end": "2025-06-30",
+          "source_text": "TTM EBITDA: USD 330 million"
+        },
+        {
+          "metric": "interest_expense",
+          "value": "95000000",
+          "basis": "ttm",
+          "measurement_start": "2024-07-01",
+          "measurement_end": "2025-06-30",
+          "source_text": "TTM interest expense: USD 95 million"
+        }
+      ]
+    }
+  ],
+  "explanation": [
+    "Management attributes the USD 70 million TTM EBITDA decline to:",
+    "- Lower customer volumes: USD 45 million reduction in EBITDA.",
+    "- Higher input costs not recovered in pricing: USD 25 million reduction.",
+    "The bridge reconciles prior TTM EBITDA of USD 400 million to USD 330 million.",
+    "Total debt increased by USD 100 million to fund working capital.",
+    "These statements and all financial amounts are synthetic training data."
+  ],
+  "pdf_sha256": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc"
+}

@@ -4,7 +4,10 @@ A developing credit surveillance platform built on a PDF retrieval-augmented gen
 
 This repository continues the work in [Chat-with-PDF-RAG-System](https://github.com/yuezf/Chat-with-PDF-RAG-System). That repository preserves the original PDF RAG demo; this one carries its Git history forward as the architecture develops into a credit surveillance product.
 
-> **Status:** RAG persistence and retrieval foundation implemented and verified in an AWS deployment lab. Financial-fact extraction, leverage calculations, exception detection, agent investigation, and human review are planned, not yet implemented. The API currently uses tenant-scoped API keys and synchronous ingestion.
+> **Status:** RAG persistence and retrieval foundation implemented and verified in an AWS deployment lab. A local synthetic credit fixture now provides page-linked canonical facts, explicit TTM measurements, deterministic leverage calculations, and a critical exception result. Automated financial-fact extraction, persisted exceptions, agent investigation, and human review remain planned. The API currently uses tenant-scoped API keys and synchronous ingestion.
+
+- [Leverage calculation walkthrough](docs/leverage-stage.md)
+- [Local credit fixture, authorized evaluation, and notebook exercise](docs/credit-fixture-stage.md)
 
 ## Verified AWS deployment lab
 
@@ -394,7 +397,7 @@ a running database:
 RUN_DATABASE_TESTS=1 python -m unittest tests.test_document_repository_integration -v
 ```
 
-GitHub Actions runs the unit suite and both PostgreSQL integration-test modules
+GitHub Actions runs the unit suite and all three PostgreSQL integration-test modules
 on pushes and pull requests to `main`. Its fresh pgvector service is migrated
 with Alembic before tests run, and `alembic check` detects model/schema drift.
 The CI model settings are placeholders; tests mock external model calls and do
@@ -1013,8 +1016,8 @@ Priority order:
 
 1. Complete AWS lab teardown and Billing verification; persistent PostgreSQL, vector, and original-file storage have been verified in the lab
 2. Move ingestion into background jobs
-3. Seed one borrower with two periods of financial facts
-4. Calculate leverage and detect one exception in deterministic code
+3. Implemented locally: seed one borrower with two periods of page-linked financial facts
+4. Implemented locally: calculate leverage and return one critical exception result in deterministic code
 5. Build one bounded analyst agent to investigate that exception
 6. Persist its runs, tool calls, evidence, and termination reasons
 7. Add retries, timeouts, idempotency, tracing, and agent evaluations
@@ -1094,4 +1097,4 @@ It is to build a small credit surveillance workflow whose behavior can be:
 - Scaled
 - Improved through evidence rather than intuition
 
-The current PDF RAG foundation provides document identity, source attribution, and tenant-aware retrieval. The next product layer will add deterministic credit calculations, exception detection, evidence-backed investigation, and human review.
+The current foundation provides document identity, source attribution, tenant-aware retrieval, and a local synthetic case with deterministic leverage and exception evaluation. The next product layer will add evidence-backed investigation, persisted outcomes, and human review.

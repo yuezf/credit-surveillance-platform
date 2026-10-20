@@ -248,6 +248,15 @@ class FinancialFact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "confidence >= 0 AND confidence <= 1",
             name="confidence_range",
         ),
+        CheckConstraint(
+            "(measurement_basis IS NULL AND measurement_start IS NULL "
+            "AND measurement_end IS NULL) OR "
+            "(measurement_basis IS NOT NULL AND measurement_end IS NOT NULL AND ("
+            "(measurement_basis = 'point_in_time' AND measurement_start IS NULL) OR "
+            "(measurement_basis = 'ttm' AND measurement_start IS NOT NULL "
+            "AND measurement_start <= measurement_end)))",
+            name="measurement_definition",
+        ),
         Index(
             "ix_financial_facts_borrower_period",
             "borrower_id",
@@ -278,6 +287,10 @@ class FinancialFact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("document_pages.id", ondelete="SET NULL"),
     )
     metric_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Nullable for legacy facts: never infer an unknown measurement definition.
+    measurement_basis: Mapped[str | None] = mapped_column(String(20))
+    measurement_start: Mapped[date | None] = mapped_column(Date)
+    measurement_end: Mapped[date | None] = mapped_column(Date)
     value: Mapped[Decimal] = mapped_column(Numeric(24, 6), nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
     currency: Mapped[str | None] = mapped_column(String(3))

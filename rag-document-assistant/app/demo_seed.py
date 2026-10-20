@@ -30,8 +30,8 @@ class DemoScope:
     current_period_id: uuid.UUID
 
 
-def seed_demo_scope(session: Session) -> DemoScope:
-    """Create the deterministic demo tenant, borrower, and periods if absent."""
+def seed_demo_scope(session: Session, *, commit: bool = True) -> DemoScope:
+    """Create demo scope; commit=False lets a fixture own the full transaction."""
     try:
         tenant = session.get(Tenant, DEMO_TENANT_ID)
         if tenant is None:
@@ -66,7 +66,10 @@ def seed_demo_scope(session: Session) -> DemoScope:
             fiscal_quarter=2,
             label="Q2 2025",
         )
-        session.commit()
+        if commit:
+            session.commit()
+        else:
+            session.flush()
     except Exception:
         session.rollback()
         raise

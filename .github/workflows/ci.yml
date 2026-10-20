@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: rag-document-assistant
     env:
-      DATABASE_URL: postgresql+psycopg://rag_app:rag_app_local@localhost:55432/rag_credit
+      DATABASE_URL: postgresql+psycopg://rag_app:rag_app_local@localhost:55432/rag_credit_test
       MODEL_BASE_URL: http://127.0.0.1:9999/v1
       MODEL_API_KEY: ci-test-key
       LLM_MODEL: ci-test-chat
@@ -26,13 +26,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:0.8.6-pg16-bookworm
         env:
-          POSTGRES_DB: rag_credit
+          POSTGRES_DB: rag_credit_test
           POSTGRES_USER: rag_app
           POSTGRES_PASSWORD: rag_app_local
         ports:
           - 55432:5432
         options: >-
-          --health-cmd "pg_isready -U rag_app -d rag_credit"
+          --health-cmd "pg_isready -U rag_app -d rag_credit_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -55,4 +55,4 @@ jobs:
       - name: Run PostgreSQL integration tests
         env:
           RUN_DATABASE_TESTS: '1'
-        run: python -m unittest tests.test_document_repository_integration tests.test_api_postgres_integration -v
+        run: python -m unittest tests.test_document_repository_integration tests.test_api_postgres_integration tests.test_credit_fixture_integration -v
