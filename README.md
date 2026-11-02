@@ -4,10 +4,14 @@ A developing credit surveillance platform built on a PDF retrieval-augmented gen
 
 This repository continues the work in [Chat-with-PDF-RAG-System](https://github.com/yuezf/Chat-with-PDF-RAG-System). That repository preserves the original PDF RAG demo; this one carries its Git history forward as the architecture develops into a credit surveillance product.
 
-> **Status:** RAG persistence and retrieval foundation implemented and verified in an AWS deployment lab. A local synthetic credit fixture now provides page-linked canonical facts, explicit TTM measurements, deterministic leverage calculations, and a critical exception result. Automated financial-fact extraction, persisted exceptions, agent investigation, and human review remain planned. The API currently uses tenant-scoped API keys and synchronous ingestion.
+> **Status:** RAG persistence and retrieval foundation implemented and verified in an AWS deployment lab. A local synthetic credit fixture now provides page-linked canonical facts, explicit TTM measurements, deterministic leverage calculations, a critical exception result, typed case-scoped fact/page read tools, search/draft/review tools, a real embedding adapter, and a bounded local model/tool investigation loop. One live synthetic investigation produced a page-supported draft. Automated financial-fact extraction, persisted exceptions/run traces, and durable analyst review/approval remain planned. The API currently uses tenant-scoped API keys and synchronous ingestion.
 
 - [Leverage calculation walkthrough](docs/leverage-stage.md)
 - [Local credit fixture, authorized evaluation, and notebook exercise](docs/credit-fixture-stage.md)
+- [Typed fact-reading tools and exact-page lookup](docs/case-read-tools-stage.md)
+- [Case search, page-preserving indexing, and draft/review outcomes](docs/search-outcomes-stage.md)
+- [Configured embedding adapter and offline tests](docs/embedding-adapter-stage.md)
+- [Bounded model/tool loop and notebook walkthrough](docs/bounded-agent-stage.md)
 
 ## Verified AWS deployment lab
 
@@ -26,7 +30,7 @@ the replacement task returned the same document and chunks without re-ingestion.
 - [Synthetic test PDF](docs/aws-rag-lab/fixtures/synthetic-examplecorp-q2-2025.pdf)
 
 This is a short-lived deployment lab, not a live public demo or a production
-availability claim. Browser access and credit-surveillance agents are deferred.
+availability claim. Browser access and cloud agent execution are deferred; the analyst-agent slice is developed locally.
 **As of the October 5, 2026 verification, teardown and the final Billing check
 were pending.** The checked-in material is a sanitized manual reference, not an
 automated infrastructure stack.
@@ -41,7 +45,7 @@ One borrower + two reporting periods
 → human review
 ```
 
-The project avoids a high-level RAG framework so ingestion, chunking, retrieval, and prompt construction remain visible and testable.
+The first local analyst agent uses a small Python tool-calling loop so its control flow remains visible and testable. A later LangGraph stage will add durable human review and resumption while reusing the same domain services and tools; a focused LangChain extension will teach model/tool integrations. See the [agent engineering learning roadmap](docs/agent-learning-roadmap.md).
 
 ---
 
@@ -397,7 +401,7 @@ a running database:
 RUN_DATABASE_TESTS=1 python -m unittest tests.test_document_repository_integration -v
 ```
 
-GitHub Actions runs the unit suite and all three PostgreSQL integration-test modules
+GitHub Actions runs the unit suite and all six PostgreSQL integration-test modules
 on pushes and pull requests to `main`. Its fresh pgvector service is migrated
 with Alembic before tests run, and `alembic check` detects model/schema drift.
 The CI model settings are placeholders; tests mock external model calls and do
@@ -1012,17 +1016,19 @@ A production deployment should add the following controls.
 
 ## Planned Improvements
 
-Priority order:
+Completed locally: deterministic leverage and the strict >4.5x rule; one borrower with two periods of page-linked canonical facts.
 
-1. Complete AWS lab teardown and Billing verification; persistent PostgreSQL, vector, and original-file storage have been verified in the lab
-2. Move ingestion into background jobs
-3. Implemented locally: seed one borrower with two periods of page-linked financial facts
-4. Implemented locally: calculate leverage and return one critical exception result in deterministic code
-5. Build one bounded analyst agent to investigate that exception
-6. Persist its runs, tool calls, evidence, and termination reasons
-7. Add retries, timeouts, idempotency, tracing, and agent evaluations
-8. Add human review and approval
-9. Expand credit metrics, policies, extraction, and retrieval only after the thin workflow works
+Learning-focused local implementation order:
+
+1. Implemented locally: typed, case-scoped fact and exact-page tools with authorization and JSON-compatible outputs
+2. Implemented locally: page-preserving indexing, case-scoped search with an explicit embedding backend, and citation-checked draft/human-review outcomes (verified offline; real encoder selection remains explicit)
+3. Implemented locally: a bounded Python model/tool loop with step/tool limits, a main-thread macOS/Linux deadline, explicit termination reasons, and one successful live Gemini smoke test
+4. Persist input/rule snapshots, runs, tool calls, evidence, and outcomes; broaden the existing fake-model tests and build a small real-model evaluation set with explicit usage/cost controls
+5. Reuse the tested services and tools in LangGraph; add durable checkpoints, analyst approval, restart/resume behavior, and tests preventing duplicate side effects
+6. Add a focused LangChain model/tool integration exercise and compare it on the same evaluation cases
+7. Expand background execution, retries, metrics, extraction, and retrieval only after the narrow investigation works
+
+Each stage includes a design explanation, a coding exercise, appropriate tests, and a walkthrough before proceeding. Framework adoption must preserve deterministic financial rules, tenant/case authorization, and citation checks. Background ingestion and AWS lab lifecycle work are tracked separately from this local learning sequence.
 
 Later retrieval improvements may include keyword search, reranking, evidence gating, and citation validation. The current retrieval path remains semantic search over pgvector.
 

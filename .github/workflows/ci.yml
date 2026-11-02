@@ -55,4 +55,4 @@ jobs:
       - name: Run PostgreSQL integration tests
         env:
           RUN_DATABASE_TESTS: '1'
-        run: python -m unittest tests.test_document_repository_integration tests.test_api_postgres_integration tests.test_credit_fixture_integration -v
+        run: python -m unittest tests.test_agent_loop_integration tests.test_document_repository_integration tests.test_api_postgres_integration tests.test_credit_fixture_integration tests.test_case_tools_integration tests.test_investigation_integration -v

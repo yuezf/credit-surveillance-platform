@@ -103,14 +103,14 @@ def _load_period_observations(
     return observations
 
 
-def evaluate_credit_case(
+def authorize_credit_case(
     session: Session,
     *,
     tenant_id: uuid.UUID,
     borrower_id: uuid.UUID,
     prior_period_id: uuid.UUID,
     current_period_id: uuid.UUID,
-) -> CreditCaseResult:
+) -> tuple[ReportingPeriod, ReportingPeriod]:
     """Authorize BOTH periods before reading facts; fail closed on scope errors."""
     allowed_periods = (prior_period_id, current_period_id)
     for period_id in allowed_periods:
@@ -125,6 +125,23 @@ def evaluate_credit_case(
         or prior.period_end >= current.period_end
     ):
         raise CreditDataError("Case requires two chronologically ordered quarter periods")
+    return prior, current
+
+
+def evaluate_credit_case(
+    session: Session,
+    *,
+    tenant_id: uuid.UUID,
+    borrower_id: uuid.UUID,
+    prior_period_id: uuid.UUID,
+    current_period_id: uuid.UUID,
+) -> CreditCaseResult:
+    """Read authorized facts and return deterministic leverage/rule results."""
+    prior, current = authorize_credit_case(
+        session, tenant_id=tenant_id, borrower_id=borrower_id,
+        prior_period_id=prior_period_id, current_period_id=current_period_id,
+    )
+    allowed_periods = (prior_period_id, current_period_id)
     results = []
     for period in (prior, current):
         observations = _load_period_observations(

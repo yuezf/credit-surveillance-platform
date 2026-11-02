@@ -73,7 +73,7 @@ def seed_credit_fixture(session: Session, *, storage_root: Path) -> DemoScope:
     Original storage is explicitly LOCAL, independent of environment settings.
     PDF bytes and database transactions cannot commit atomically; a DB commit
     failure can leave a harmless content-addressed local PDF for the next retry.
-    No fake embeddings are inserted. Document indexing stays pending.
+    This seed inserts no embeddings; a previously completed index is preserved.
     """
     manifest = json.loads((FIXTURE_ROOT / "example_corp_credit.json").read_text())
     content = FIXTURE_PDF.read_bytes()
@@ -91,13 +91,15 @@ def seed_credit_fixture(session: Session, *, storage_root: Path) -> DemoScope:
         destination = store.root / pdf_object_key(scope.tenant_id, content_hash)
         if destination.exists() and destination.read_bytes() != content:
             raise FixtureConflictError("Existing local original has different bytes")
-        _ensure_row(
+        document = _ensure_row(
             session, Document, document_id, tenant_id=scope.tenant_id,
             borrower_id=scope.borrower_id, reporting_period_id=scope.current_period_id,
             original_filename=FIXTURE_PDF.name, content_hash=content_hash,
             media_type="application/pdf", document_type="supporting", byte_size=len(content),
-            storage_uri=destination.as_uri(), status="pending",
+            storage_uri=destination.as_uri(),
         )
+        if document.status not in ("pending", "completed"):
+            raise FixtureConflictError("Existing fixture document is not pending or completed")
         for page in pages:
             _ensure_row(
                 session, DocumentPage, build_page_id(document_id, page.page_number),

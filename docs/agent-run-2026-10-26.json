@@ -1,0 +1,444 @@
+{
+  "model": "gemini-3.6-flash",
+  "database": "rag_credit_embedding_20261025_test",
+  "result": {
+    "termination_reason": "draft_finding",
+    "outcome": {
+      "status": "draft_finding",
+      "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+      "prior_period_id": "8e51b2fb-9ccc-5e09-8c1b-c1ca625ed718",
+      "current_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+      "claims": [
+        {
+          "text": "TTM EBITDA declined by USD 70 million from USD 400 million in the prior period to USD 330 million in the current period, driven by a USD 45 million reduction due to lower customer volumes and a USD 25 million reduction from higher input costs that were not recovered in pricing.",
+          "citations": [
+            {
+              "source": {
+                "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                "document_name": "example_corp_credit.pdf",
+                "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+                "page_number": 2,
+                "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+              },
+              "quote": "Management attributes the USD 70 million TTM EBITDA decline to:\n- Lower customer volumes: USD 45 million reduction in EBITDA.\n- Higher input costs not recovered in pricing: USD 25 million reduction.\nThe bridge reconciles prior TTM EBITDA of USD 400 million to USD 330 million."
+            }
+          ]
+        },
+        {
+          "text": "Total debt increased by USD 100 million from USD 1,500 million to USD 1,600 million to fund working capital.",
+          "citations": [
+            {
+              "source": {
+                "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                "document_name": "example_corp_credit.pdf",
+                "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+                "page_number": 2,
+                "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+              },
+              "quote": "Total debt increased by USD 100 million to fund working capital."
+            }
+          ]
+        }
+      ],
+      "rule": {
+        "prior_leverage": "3.75",
+        "current_leverage": "4.848484848484848484848484848484848",
+        "threshold": "4.5",
+        "severity": "critical"
+      },
+      "citation_validation": "passed",
+      "requires_human_review": true
+    },
+    "model_turns": 3,
+    "tool_calls": 8,
+    "elapsed_seconds": 13.152017583022825,
+    "steps": [
+      {
+        "kind": "model",
+        "number": 1,
+        "elapsed_seconds": 2.2408579170005396,
+        "tool_name": null,
+        "call_id": null,
+        "arguments": null,
+        "result": null,
+        "usage": {
+          "completion_tokens": 80,
+          "prompt_tokens": 1144,
+          "total_tokens": 1394
+        }
+      },
+      {
+        "kind": "tool",
+        "number": 1,
+        "elapsed_seconds": 2.2574342499719933,
+        "tool_name": "get_current_fact",
+        "call_id": "call_1045365",
+        "arguments": "{\"metric\":\"total_debt\"}",
+        "result": {
+          "ok": true,
+          "data": {
+            "fact_id": "646112d8-4803-52be-a61d-8dd2d9462f68",
+            "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+            "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+            "metric": "total_debt",
+            "value": "1600000000.000000",
+            "currency": "USD",
+            "scale": "units",
+            "basis": "point_in_time",
+            "measurement_start": null,
+            "measurement_end": "2025-06-30",
+            "is_canonical": true,
+            "source_text": "Total debt at quarter-end: USD 1,600 million",
+            "source": {
+              "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+              "document_name": "example_corp_credit.pdf",
+              "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+              "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+              "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+              "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+              "page_number": 2,
+              "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+            }
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "tool",
+        "number": 2,
+        "elapsed_seconds": 2.2710842919768766,
+        "tool_name": "get_current_fact",
+        "call_id": "call_1045366",
+        "arguments": "{\"metric\":\"ebitda\"}",
+        "result": {
+          "ok": true,
+          "data": {
+            "fact_id": "7f9af93b-82ea-5bfb-acff-cf81f0d529c4",
+            "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+            "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+            "metric": "ebitda",
+            "value": "330000000.000000",
+            "currency": "USD",
+            "scale": "units",
+            "basis": "ttm",
+            "measurement_start": "2024-07-01",
+            "measurement_end": "2025-06-30",
+            "is_canonical": true,
+            "source_text": "TTM EBITDA: USD 330 million",
+            "source": {
+              "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+              "document_name": "example_corp_credit.pdf",
+              "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+              "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+              "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+              "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+              "page_number": 2,
+              "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+            }
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "tool",
+        "number": 3,
+        "elapsed_seconds": 2.2834239579970017,
+        "tool_name": "get_prior_fact",
+        "call_id": "call_1045367",
+        "arguments": "{\"metric\":\"total_debt\"}",
+        "result": {
+          "ok": true,
+          "data": {
+            "fact_id": "c66ae679-c4ba-54bd-9d63-00c022a827ef",
+            "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+            "reporting_period_id": "8e51b2fb-9ccc-5e09-8c1b-c1ca625ed718",
+            "metric": "total_debt",
+            "value": "1500000000.000000",
+            "currency": "USD",
+            "scale": "units",
+            "basis": "point_in_time",
+            "measurement_start": null,
+            "measurement_end": "2025-03-31",
+            "is_canonical": true,
+            "source_text": "Total debt at quarter-end: USD 1,500 million",
+            "source": {
+              "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+              "document_name": "example_corp_credit.pdf",
+              "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+              "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+              "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+              "page_id": "ecb98ed6-50e6-5852-a8ae-750e9274b53c",
+              "page_number": 1,
+              "text_hash": "b6b8bcf3014f909b188ec3547061fc2e249921282cee66fbec55e63f01ebf2f2"
+            }
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "tool",
+        "number": 4,
+        "elapsed_seconds": 2.2937334169982933,
+        "tool_name": "get_prior_fact",
+        "call_id": "call_1045368",
+        "arguments": "{\"metric\":\"ebitda\"}",
+        "result": {
+          "ok": true,
+          "data": {
+            "fact_id": "ded94e3f-40f7-5a7d-9895-ab380084e3ac",
+            "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+            "reporting_period_id": "8e51b2fb-9ccc-5e09-8c1b-c1ca625ed718",
+            "metric": "ebitda",
+            "value": "400000000.000000",
+            "currency": "USD",
+            "scale": "units",
+            "basis": "ttm",
+            "measurement_start": "2024-04-01",
+            "measurement_end": "2025-03-31",
+            "is_canonical": true,
+            "source_text": "TTM EBITDA: USD 400 million",
+            "source": {
+              "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+              "document_name": "example_corp_credit.pdf",
+              "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+              "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+              "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+              "page_id": "ecb98ed6-50e6-5852-a8ae-750e9274b53c",
+              "page_number": 1,
+              "text_hash": "b6b8bcf3014f909b188ec3547061fc2e249921282cee66fbec55e63f01ebf2f2"
+            }
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "model",
+        "number": 2,
+        "elapsed_seconds": 6.369416999979876,
+        "tool_name": null,
+        "call_id": null,
+        "arguments": null,
+        "result": null,
+        "usage": {
+          "completion_tokens": 143,
+          "prompt_tokens": 3659,
+          "total_tokens": 4035
+        }
+      },
+      {
+        "kind": "tool",
+        "number": 5,
+        "elapsed_seconds": 6.385990249982569,
+        "tool_name": "get_document_page",
+        "call_id": "call_955176",
+        "arguments": "{\"page_number\":1,\"document_id\":\"9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6\"}",
+        "result": {
+          "ok": true,
+          "data": {
+            "source": {
+              "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+              "document_name": "example_corp_credit.pdf",
+              "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+              "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+              "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+              "page_id": "ecb98ed6-50e6-5852-a8ae-750e9274b53c",
+              "page_number": 1,
+              "text_hash": "b6b8bcf3014f909b188ec3547061fc2e249921282cee66fbec55e63f01ebf2f2"
+            },
+            "text": "Example Corp | Credit Case\nQ1 2025 - SYNTHETIC TRAINING DATA\nFinancial observations\nTTM revenue: USD 2,400 million\nTotal debt at quarter-end: USD 1,500 million\nTTM EBITDA: USD 400 million\nTTM interest expense: USD 80 million\nTTM window: 2024-04-01 through 2025-03-31.\nDebt is a point-in-time balance at that window's ending quarter-end.\nAmounts are USD millions. EBITDA is unadjusted; debt is gross debt.\nFictional borrower. Not an actual filing or investment recommendation.\nPage 1 of 2"
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "tool",
+        "number": 6,
+        "elapsed_seconds": 6.397126499970909,
+        "tool_name": "get_document_page",
+        "call_id": "call_955177",
+        "arguments": "{\"document_id\":\"9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6\",\"page_number\":2}",
+        "result": {
+          "ok": true,
+          "data": {
+            "source": {
+              "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+              "document_name": "example_corp_credit.pdf",
+              "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+              "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+              "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+              "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+              "page_number": 2,
+              "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+            },
+            "text": "Example Corp | Credit Case\nQ2 2025 - SYNTHETIC TRAINING DATA\nFinancial observations\nTTM revenue: USD 2,200 million\nTotal debt at quarter-end: USD 1,600 million\nTTM EBITDA: USD 330 million\nTTM interest expense: USD 95 million\nTTM window: 2024-07-01 through 2025-06-30.\nDebt is a point-in-time balance at that window's ending quarter-end.\nAmounts are USD millions. EBITDA is unadjusted; debt is gross debt.\nSynthetic management explanation\nManagement attributes the USD 70 million TTM EBITDA decline to:\n- Lower customer volumes: USD 45 million reduction in EBITDA.\n- Higher input costs not recovered in pricing: USD 25 million reduction.\nThe bridge reconciles prior TTM EBITDA of USD 400 million to USD 330 million.\nTotal debt increased by USD 100 million to fund working capital.\nThese statements and all financial amounts are synthetic training data.\nFictional borrower. Not an actual filing or investment recommendation.\nPage 2 of 2"
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "tool",
+        "number": 7,
+        "elapsed_seconds": 6.877269542019349,
+        "tool_name": "search_documents",
+        "call_id": "call_955178",
+        "arguments": "{\"query\":\"EBITDA debt leverage increase decrease drivers\"}",
+        "result": {
+          "ok": true,
+          "data": {
+            "query": "EBITDA debt leverage increase decrease drivers",
+            "embedding_model": "gemini-embedding-001",
+            "matches": [
+              {
+                "chunk_id": "81090f53-3159-5993-9ba7-ce20e3fe9b07",
+                "text": "Example Corp | Credit Case\nQ2 2025 - SYNTHETIC TRAINING DATA\nFinancial observations\nTTM revenue: USD 2,200 million\nTotal debt at quarter-end: USD 1,600 million\nTTM EBITDA: USD 330 million\nTTM interest expense: USD 95 million\nTTM window: 2024-07-01 through 2025-06-30.\nDebt is a point-in-time balance at that window's ending quarter-end.\nAmounts are USD millions. EBITDA is unadjusted; debt is gross debt.\nSynthetic management explanation\nManagement attributes the USD 70 million TTM EBITDA decline to:\n- Lower customer volumes: USD 45 million reduction in EBITDA.\n- Higher input costs not recovered in pricing: USD 25 million reduction.\nThe bridge reconciles prior TTM EBITDA of USD 400 million to USD 330 million.\nTotal debt increased by USD 100 million to fund working capital.\nThese statements and",
+                "truncated": false,
+                "distance": 0.3090506196021985,
+                "sources": [
+                  {
+                    "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                    "document_name": "example_corp_credit.pdf",
+                    "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                    "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                    "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                    "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+                    "page_number": 2,
+                    "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+                  }
+                ]
+              },
+              {
+                "chunk_id": "93d4a618-ccdf-5e68-9625-725cf10e3193",
+                "text": "Example Corp | Credit Case\nQ1 2025 - SYNTHETIC TRAINING DATA\nFinancial observations\nTTM revenue: USD 2,400 million\nTotal debt at quarter-end: USD 1,500 million\nTTM EBITDA: USD 400 million\nTTM interest expense: USD 80 million\nTTM window: 2024-04-01 through 2025-03-31.\nDebt is a point-in-time balance at that window's ending quarter-end.\nAmounts are USD millions. EBITDA is unadjusted; debt is gross debt.\nFictional borrower. Not an actual filing or investment recommendation.\nPage 1 of 2",
+                "truncated": false,
+                "distance": 0.34623507581740054,
+                "sources": [
+                  {
+                    "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                    "document_name": "example_corp_credit.pdf",
+                    "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                    "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                    "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                    "page_id": "ecb98ed6-50e6-5852-a8ae-750e9274b53c",
+                    "page_number": 1,
+                    "text_hash": "b6b8bcf3014f909b188ec3547061fc2e249921282cee66fbec55e63f01ebf2f2"
+                  }
+                ]
+              },
+              {
+                "chunk_id": "f0b516ec-e699-5166-bd22-e15168358548",
+                "text": "D 330 million.\nTotal debt increased by USD 100 million to fund working capital.\nThese statements and all financial amounts are synthetic training data.\nFictional borrower. Not an actual filing or investment recommendation.\nPage 2 of 2",
+                "truncated": false,
+                "distance": 0.37799171340514826,
+                "sources": [
+                  {
+                    "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                    "document_name": "example_corp_credit.pdf",
+                    "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                    "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                    "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                    "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+                    "page_number": 2,
+                    "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+                  }
+                ]
+              }
+            ]
+          },
+          "error": null
+        },
+        "usage": null
+      },
+      {
+        "kind": "model",
+        "number": 3,
+        "elapsed_seconds": 13.113957749970723,
+        "tool_name": null,
+        "call_id": null,
+        "arguments": null,
+        "result": null,
+        "usage": {
+          "completion_tokens": 319,
+          "prompt_tokens": 6840,
+          "total_tokens": 8190
+        }
+      },
+      {
+        "kind": "tool",
+        "number": 8,
+        "elapsed_seconds": 13.151927792001516,
+        "tool_name": "create_finding",
+        "call_id": "call_1145761",
+        "arguments": "{\"claims\":[{\"text\":\"TTM EBITDA declined by USD 70 million from USD 400 million in the prior period to USD 330 million in the current period, driven by a USD 45 million reduction due to lower customer volumes and a USD 25 million reduction from higher input costs that were not recovered in pricing.\",\"citations\":[{\"quote\":\"Management attributes the USD 70 million TTM EBITDA decline to:\\n- Lower customer volumes: USD 45 million reduction in EBITDA.\\n- Higher input costs not recovered in pricing: USD 25 million reduction.\\nThe bridge reconciles prior TTM EBITDA of USD 400 million to USD 330 million.\",\"page_number\":2,\"document_id\":\"9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6\"}]},{\"text\":\"Total debt increased by USD 100 million from USD 1,500 million to USD 1,600 million to fund working capital.\",\"citations\":[{\"quote\":\"Total debt increased by USD 100 million to fund working capital.\",\"document_id\":\"9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6\",\"page_number\":2}]}]}",
+        "result": {
+          "ok": true,
+          "data": {
+            "status": "draft_finding",
+            "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+            "prior_period_id": "8e51b2fb-9ccc-5e09-8c1b-c1ca625ed718",
+            "current_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+            "claims": [
+              {
+                "text": "TTM EBITDA declined by USD 70 million from USD 400 million in the prior period to USD 330 million in the current period, driven by a USD 45 million reduction due to lower customer volumes and a USD 25 million reduction from higher input costs that were not recovered in pricing.",
+                "citations": [
+                  {
+                    "source": {
+                      "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                      "document_name": "example_corp_credit.pdf",
+                      "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                      "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                      "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                      "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+                      "page_number": 2,
+                      "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+                    },
+                    "quote": "Management attributes the USD 70 million TTM EBITDA decline to:\n- Lower customer volumes: USD 45 million reduction in EBITDA.\n- Higher input costs not recovered in pricing: USD 25 million reduction.\nThe bridge reconciles prior TTM EBITDA of USD 400 million to USD 330 million."
+                  }
+                ]
+              },
+              {
+                "text": "Total debt increased by USD 100 million from USD 1,500 million to USD 1,600 million to fund working capital.",
+                "citations": [
+                  {
+                    "source": {
+                      "document_id": "9b6b283e-f7b3-52e2-bd4a-5f02c552b4d6",
+                      "document_name": "example_corp_credit.pdf",
+                      "document_hash": "71ad1ebf654a870768b920fc05531ab9cfec04052b257bfdac2e63bd0619fcdc",
+                      "borrower_id": "69911c0b-802e-54fb-aa6d-ff8291f80e89",
+                      "reporting_period_id": "11b968c9-c5c8-59af-8545-f7b85cf46ffa",
+                      "page_id": "00396aa9-8b23-5094-b37e-dc593dbb4466",
+                      "page_number": 2,
+                      "text_hash": "4d9cd63c7427b69de7425b8b9effa54f1da4378a75a6a33a966f8d204aee68f2"
+                    },
+                    "quote": "Total debt increased by USD 100 million to fund working capital."
+                  }
+                ]
+              }
+            ],
+            "rule": {
+              "prior_leverage": "3.75",
+              "current_leverage": "4.848484848484848484848484848484848",
+              "threshold": "4.5",
+              "severity": "critical"
+            },
+            "citation_validation": "passed",
+            "requires_human_review": true
+          },
+          "error": null
+        },
+        "usage": null
+      }
+    ]
+  }
+}
